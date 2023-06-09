@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
@@ -93,6 +95,8 @@ func (c *Cluster) Start(ctx context.Context) error {
 		imdsPort: port,
 	}
 
+	mux := NewLogMux(os.Stderr)
+
 	for _, m := range c.machines {
 		m := m
 
@@ -109,20 +113,27 @@ func (c *Cluster) Start(ctx context.Context) error {
 				return err
 			}
 
-			scanner := bufio.NewScanner(c)
+			tryMux := true
 
-			// TODO: pad to max name length, use different colors per machine, etc.
-			nameStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#04B575")).
-				BorderStyle(lipgloss.NormalBorder()).
-				PaddingRight(4).
-				BorderForeground(lipgloss.Color("#3C3C3C")).
-				BorderRight(true)
+			if tryMux {
+				s := mux.Stream(m.Name)
+				io.Copy(s, c)
+			} else {
+				scanner := bufio.NewScanner(c)
 
-			// TODO: try and buffer lines for a few ms to reduce interleaving
-			for scanner.Scan() {
-				// TODO: accept writer instead of writing to stdout implicitly
-				fmt.Printf("%s %s\n", nameStyle.Render(m.Name), scanner.Text())
+				// TODO: pad to max name length, use different colors per machine, etc.
+				nameStyle := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#04B575")).
+					BorderStyle(lipgloss.NormalBorder()).
+					PaddingRight(4).
+					BorderForeground(lipgloss.Color("#3C3C3C")).
+					BorderRight(true)
+
+				// TODO: try and buffer lines for a few ms to reduce interleaving
+				for scanner.Scan() {
+					// TODO: accept writer instead of writing to stdout implicitly
+					fmt.Printf("%s %s\n", nameStyle.Render(m.Name), scanner.Text())
+				}
 			}
 
 			return nil
